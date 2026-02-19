@@ -15,7 +15,12 @@ contract TermVault is ITermVault, ReentrancyGuard, Pausable, AccessControl {
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant YIELD_INJECTOR_ROLE = keccak256("YIELD_INJECTOR_ROLE");
 
-    IERC20 public immutable asset;
+    IERC20 public immutable _asset;
+
+    function asset() external view returns (address) {
+        return address(_asset);
+    }
+
     ITermPositionNFT public positionNFT;
 
     uint256[] public termDurations;
@@ -65,27 +70,27 @@ contract TermVault is ITermVault, ReentrancyGuard, Pausable, AccessControl {
     error TransferFailed();
 
     constructor(
-        address _asset,
-        address _positionNFT,
-        uint256[] memory _termDurations,
-        uint256[] memory _termAPYs,
-        uint256 _depositCap,
-        uint256 _minDeposit,
+        address asset_,
+        address positionNFT_,
+        uint256[] memory termDurations_,
+        uint256[] memory termAPYs_,
+        uint256 depositCap_,
+        uint256 minDeposit_,
         address admin
     ) {
-        require(_termDurations.length == _termAPYs.length, "Duration/APY mismatch");
-        require(_termDurations.length > 0, "No terms configured");
+        require(termDurations_.length == termAPYs_.length, "Duration/APY mismatch");
+        require(termDurations_.length > 0, "No terms configured");
 
-        asset = IERC20(_asset);
-        positionNFT = ITermPositionNFT(_positionNFT);
-        termDurations = _termDurations;
+        _asset = IERC20(asset_);
+        positionNFT = ITermPositionNFT(positionNFT_);
+        termDurations = termDurations_;
 
-        for (uint256 i = 0; i < _termDurations.length; i++) {
-            termAPYs[i] = _termAPYs[i];
+        for (uint256 i = 0; i < termDurations_.length; i++) {
+            termAPYs[i] = termAPYs_[i];
         }
 
-        depositCap = _depositCap;
-        minDeposit = _minDeposit;
+        depositCap = depositCap_;
+        minDeposit = minDeposit_;
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(PARAM_SETTER_ROLE, admin);
@@ -105,7 +110,7 @@ contract TermVault is ITermVault, ReentrancyGuard, Pausable, AccessControl {
         uint256 maturity = block.timestamp + termDurations[termIndex];
         uint256 apy = termAPYs[termIndex];
 
-        asset.safeTransferFrom(msg.sender, address(this), amount);
+        _asset.safeTransferFrom(msg.sender, address(this), amount);
 
         positionId = positionNFT.mint(
             receiver,
@@ -138,10 +143,12 @@ contract TermVault is ITermVault, ReentrancyGuard, Pausable, AccessControl {
         positionNFT.burn(positionId);
 
         totalPrincipal -= pos.principal;
-        totalAccruedYield -= yieldAmount;
+        unchecked {
+            totalAccruedYield -= yieldAmount > totalAccruedYield ? totalAccruedYield : yieldAmount;
+        }
         totalWithdrawn += payout;
 
-        asset.safeTransfer(msg.sender, payout);
+        _asset.safeTransfer(msg.sender, payout);
 
         emit Withdraw(positionId, msg.sender, pos.principal, yieldAmount, payout);
         emit YieldDistributed(positionId, yieldAmount);
@@ -168,7 +175,7 @@ contract TermVault is ITermVault, ReentrancyGuard, Pausable, AccessControl {
     function recordYieldInjection(uint256 amount) external onlyRole(YIELD_INJECTOR_ROLE) {
         if (amount == 0) revert ZeroAmount();
 
-        asset.safeTransferFrom(msg.sender, address(this), amount);
+        _asset.safeTransferFrom(msg.sender, address(this), amount);
         totalAccruedYield += amount;
 
         emit YieldInjected(amount, totalAccruedYield);
@@ -223,7 +230,7 @@ contract TermVault is ITermVault, ReentrancyGuard, Pausable, AccessControl {
     }
 
     function totalAssets() external view returns (uint256) {
-        return asset.balanceOf(address(this));
+        return _asset.balanceOf(address(this));
     }
 
     function availableYield() external view returns (uint256) {

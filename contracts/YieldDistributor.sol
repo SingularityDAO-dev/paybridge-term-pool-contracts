@@ -43,7 +43,7 @@ contract YieldDistributor is IYieldDistributor, AccessControl {
         if (amount == 0) revert ZeroAmount();
 
         asset.safeTransferFrom(msg.sender, address(this), amount);
-        asset.safeApprove(address(vault), amount);
+        asset.approve(address(vault), amount);
         vault.recordYieldInjection(amount);
 
         injectionHistory.push(InjectionRecord({

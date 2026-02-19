@@ -76,12 +76,15 @@ describe("TERM Pool", function () {
     // Authorize yield distributor
     await vault.setYieldInjector(await yieldDistributor.getAddress(), true);
     await vault.grantRole(await vault.YIELD_INJECTOR_ROLE(), treasury.address);
+    await yieldDistributor.grantRole(await yieldDistributor.INJECTOR_ROLE(), treasury.address);
 
-    // Approve tokens
-    await mockUSDC.connect(user1).approve(await vault.getAddress(), mintAmount);
-    await mockUSDC.connect(user2).approve(await vault.getAddress(), mintAmount);
-    await mockUSDC.connect(user3).approve(await vault.getAddress(), mintAmount);
-    await mockUSDC.connect(treasury).approve(await yieldDistributor.getAddress(), mintAmount);
+    // Approve tokens - use larger amounts
+    const largeApproval = ethers.parseUnits("10000000", 6);
+    await mockUSDC.connect(user1).approve(await vault.getAddress(), largeApproval);
+    await mockUSDC.connect(user2).approve(await vault.getAddress(), largeApproval);
+    await mockUSDC.connect(user3).approve(await vault.getAddress(), largeApproval);
+    await mockUSDC.connect(treasury).approve(await yieldDistributor.getAddress(), largeApproval);
+    await mockUSDC.connect(treasury).approve(await vault.getAddress(), largeApproval);
   });
 
   describe("Deployment", function () {

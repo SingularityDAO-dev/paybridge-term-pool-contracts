@@ -4,17 +4,16 @@ pragma solidity ^0.8.23;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {ERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
-import {Counters} from "@openzeppelin/contracts/utils/Counters.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
 import {ITermPositionNFT} from "./interfaces/ITermPool.sol";
 
 contract TermPositionNFT is ERC721, ERC721Enumerable, ITermPositionNFT {
-    using Counters for Counters.Counter;
     using Strings for uint256;
 
-    Counters.Counter private _tokenIds;
+    uint256 private _tokenIdCounter;
 
     mapping(uint256 => Position) private _positions;
     mapping(address => bool) public authorizedVaults;
@@ -53,8 +52,8 @@ contract TermPositionNFT is ERC721, ERC721Enumerable, ITermPositionNFT {
         uint256 termDuration,
         uint256 apyAtDeposit
     ) external onlyVault returns (uint256) {
-        _tokenIds.increment();
-        uint256 newTokenId = _tokenIds.current();
+        _tokenIdCounter++;
+        uint256 newTokenId = _tokenIdCounter;
 
         _positions[newTokenId] = Position({
             principal: principal,
@@ -82,21 +81,21 @@ contract TermPositionNFT is ERC721, ERC721Enumerable, ITermPositionNFT {
     }
 
     function getPosition(uint256 tokenId) external view returns (Position memory) {
-        require(_exists(tokenId), "Position does not exist");
+        require(_ownerOf(tokenId) != address(0), "Position does not exist");
         return _positions[tokenId];
     }
 
     function isMatured(uint256 tokenId) external view returns (bool) {
-        require(_exists(tokenId), "Position does not exist");
+        require(_ownerOf(tokenId) != address(0), "Position does not exist");
         return block.timestamp >= _positions[tokenId].maturityTimestamp;
     }
 
     function exists(uint256 tokenId) external view returns (bool) {
-        return _exists(tokenId);
+        return _ownerOf(tokenId) != address(0);
     }
 
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
-        require(_exists(tokenId), "Token does not exist");
+        require(_ownerOf(tokenId) != address(0), "Token does not exist");
 
         Position memory pos = _positions[tokenId];
         string memory status = block.timestamp >= pos.maturityTimestamp ? "Matured" : "Locked";
@@ -122,7 +121,7 @@ contract TermPositionNFT is ERC721, ERC721Enumerable, ITermPositionNFT {
     }
 
     function totalMinted() external view returns (uint256) {
-        return _tokenIds.current();
+        return _tokenIdCounter;
     }
 
     function supportsInterface(bytes4 interfaceId)
@@ -132,5 +131,24 @@ contract TermPositionNFT is ERC721, ERC721Enumerable, ITermPositionNFT {
         returns (bool)
     {
         return super.supportsInterface(interfaceId);
+    }
+
+    function _update(address to, uint256 tokenId, address auth)
+        internal
+        override(ERC721, ERC721Enumerable)
+        returns (address)
+    {
+        return super._update(to, tokenId, auth);
+    }
+
+    function _increaseBalance(address account, uint128 value)
+        internal
+        override(ERC721, ERC721Enumerable)
+    {
+        super._increaseBalance(account, value);
+    }
+
+    function ownerOf(uint256 tokenId) public view override(ERC721, IERC721, ITermPositionNFT) returns (address) {
+        return super.ownerOf(tokenId);
     }
 }

@@ -34,8 +34,8 @@ interface ITermPositionNFT {
     function burn(uint256 tokenId) external;
     function getPosition(uint256 tokenId) external view returns (Position memory);
     function isMatured(uint256 tokenId) external view returns (bool);
-    function ownerOf(uint256 tokenId) external view returns (address);
     function exists(uint256 tokenId) external view returns (bool);
+    function ownerOf(uint256 tokenId) external view returns (address owner);
 }
 
 interface IYieldDistributor {
