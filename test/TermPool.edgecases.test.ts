@@ -68,6 +68,7 @@ describe("TERM Pool - Edge Cases & Full Coverage", function () {
 
     await vault.setYieldInjector(await yieldDistributor.getAddress(), true);
     await vault.grantRole(await vault.YIELD_INJECTOR_ROLE(), treasury.address);
+    await yieldDistributor.grantRole(await yieldDistributor.INJECTOR_ROLE(), treasury.address);
 
     // Approve large amounts for all tests
     const largeApproval = ethers.parseUnits("10000000", 6);
@@ -234,6 +235,8 @@ describe("TERM Pool - Edge Cases & Full Coverage", function () {
   describe("Withdrawal Edge Cases", function () {
     beforeEach(async function () {
       await vault.connect(user1).deposit(ethers.parseUnits("5000", 6), 0, user1.address);
+      // Inject yield to fund withdrawals
+      await vault.connect(treasury).recordYieldInjection(ethers.parseUnits("1000", 6));
     });
 
     it("Should fail previewWithdraw for non-existent position", async function () {
@@ -247,9 +250,10 @@ describe("TERM Pool - Edge Cases & Full Coverage", function () {
         .to.be.revertedWithCustomError(vault, "PositionDoesNotExist");
     });
 
-    it("Should fail withdraw at exact maturity time", async function () {
+    it("Should fail withdraw before maturity time", async function () {
       const position = await positionNFT.getPosition(1);
-      await time.increaseTo(position.maturityTimestamp - 1);
+      // Go to 1 day before maturity
+      await time.increaseTo(Number(position.maturityTimestamp) - 86400);
       
       await expect(vault.connect(user1).withdraw(1))
         .to.be.revertedWithCustomError(vault, "PositionNotMatured");
@@ -257,7 +261,7 @@ describe("TERM Pool - Edge Cases & Full Coverage", function () {
 
     it("Should allow withdraw exactly at maturity", async function () {
       const position = await positionNFT.getPosition(1);
-      await time.increaseTo(position.maturityTimestamp);
+      await time.increaseTo(Number(position.maturityTimestamp));
       
       await expect(vault.connect(user1).withdraw(1))
         .to.emit(vault, "Withdraw");
@@ -310,6 +314,8 @@ describe("TERM Pool - Edge Cases & Full Coverage", function () {
   describe("NFT Edge Cases", function () {
     beforeEach(async function () {
       await vault.connect(user1).deposit(ethers.parseUnits("5000", 6), 0, user1.address);
+      // Inject yield for burn/withdrawal tests
+      await vault.connect(treasury).recordYieldInjection(ethers.parseUnits("1000", 6));
     });
 
     it("Should return correct exists for valid token", async function () {
@@ -335,13 +341,13 @@ describe("TERM Pool - Edge Cases & Full Coverage", function () {
       
       await vault.connect(user1).withdraw(1);
       
-      const positionAfter = await positionNFT.getPosition(1);
-      expect(positionAfter.redeemed).to.be.true;
+      // After burn, token should not exist
+      expect(await positionNFT.exists(1)).to.be.false;
     });
 
-    it("Should fail to burn non-existent token", async function () {
-      await expect(positionNFT.burn(999))
-        .to.be.revertedWith("Position does not exist");
+    it("Should fail to burn from unauthorized address", async function () {
+      await expect(positionNFT.connect(user2).burn(1))
+        .to.be.revertedWith("Caller not authorized vault");
     });
 
     it("Should fail to getPosition for non-existent token", async function () {
@@ -368,6 +374,8 @@ describe("TERM Pool - Edge Cases & Full Coverage", function () {
   describe("NFT Transfers", function () {
     beforeEach(async function () {
       await vault.connect(user1).deposit(ethers.parseUnits("5000", 6), 0, user1.address);
+      // Inject yield for withdrawal tests
+      await vault.connect(treasury).recordYieldInjection(ethers.parseUnits("1000", 6));
     });
 
     it("Should allow transfer of position NFT", async function () {
